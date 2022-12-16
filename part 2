@@ -1,0 +1,120 @@
+#include  <stdio.h>
+#include  <stdlib.h>
+#include  <sys/types.h>
+#include  <sys/ipc.h>
+#include  <sys/shm.h>
+#include <unistd.h>
+#include <sys/wait.h>
+#include <time.h>
+
+void  ParentProcess(int []);
+void  ClientProcess(int []);
+void  depositedMoney(int []);
+int childloop;
+int parentloop;
+int  main(int  argc, char *argv[])
+{
+   int    ShmID;
+   int    *ShmPTR;
+   pid_t  pid;
+   int    status;
+   int turn = 0;
+   int bankAccount = 0;
+
+     ShmID = shmget(IPC_PRIVATE, 2*sizeof(int), IPC_CREAT | 0666);
+     if (ShmID < 0) {
+          printf("*** shmget error (server) ***\n");
+          exit(1);
+     }
+     printf("Server has received a shared memory of two integers...\n");
+
+     ShmPTR = (int *) shmat(ShmID, NULL, 0);
+     if (*ShmPTR == -1) {
+          printf("*** shmat error (server) ***\n");
+          exit(1);
+     }
+     printf("Process has attached the shared memory...\n");
+
+     ShmPTR[0] = bankAccount;
+     ShmPTR[1] = turn;
+
+     printf("Bank Account = %d\n", ShmPTR[0]);
+
+     pid = fork();
+
+     if (pid < 0) {
+          printf("*** fork error (server) ***\n");
+          exit(1);
+     }
+  
+// This chechks the child process
+     else if (pid == 0) {
+       for (int i = 0 ; i < 25  ; i ++){
+         sleep(rand() % 6);
+         ClientProcess(ShmPTR);
+       }
+       exit(0);
+     }
+
+  else{
+    // This checks the parent process
+    for (int i = 0; i < 25 ;  i ++ ){
+    sleep(rand() % 6);
+    ParentProcess(ShmPTR);
+  }
+  }
+
+     wait(&status);
+     printf("Process has detected the completion of its child...\n");
+     shmdt((void *) ShmPTR);
+     printf("Process has detached its shared memory...\n");
+     shmctl(ShmID, IPC_RMID, NULL);
+     printf("Process has removed its shared memory...\n");
+     printf("Process exits...\n");
+     exit(0);
+}
+
+void  depositedMoney(int  SharedMem[]){
+  int account = SharedMem[0];
+  int deposit = rand() % 101; 
+  if (deposit % 2 == 0) {
+    account += deposit;
+    printf("Dear old Dad: Deposits $%d / Account Balance = $%d\n", deposit, account);
+  }
+  else{
+    printf("Dear old Dad: Doesn't have any money to give\n");
+  }
+  SharedMem[0] = account; 
+  SharedMem[1] = 1; 
+}
+
+// This is the same as the parent process
+void  ClientProcess(int  SharedMem[]){
+  printf("Client process started\n");
+  int account = SharedMem[0]; 
+    while (SharedMem[1] != 1);
+    int student_need = rand() % 51; 
+    printf("Poor Student needs $%d\n", student_need);
+  //check if the money in the account is greater than  student need more money, add more money to student need
+    if (student_need <= account){
+      account -= student_need; 
+      printf("Poor Student: Withdraws $%d / Account Balance = $%d\n", student_need, account);
+      }
+    else{
+      printf("Poor Student: Not Enough Cash ($%d)\n", account );
+    }
+    SharedMem[0] = account; // update shared the memory account balance
+    SharedMem[1] = 0; 
+}
+
+void ParentProcess(int SharedMem[]){
+    int account = SharedMem[0]; 
+    while (SharedMem[1] != 0);
+    if (account <= 100){
+          depositedMoney(SharedMem);
+        }
+        else{
+          printf("Dear old Dad: Thinks Student has enough Cash ($%d)\n", account);
+          SharedMem[1] = 1;
+        }
+}
